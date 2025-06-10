@@ -1,110 +1,108 @@
 # JRA競馬オッズ変動率モニタリングシステム
 
-📖 プロジェクト概要
+## 📖 プロジェクト概要
+JRA公式サイトと netkeiba.com の両方からデータを取得し、各レース・各馬ごとのオッズ情報を取得・集計・可視化するシステムです。以下を実現します。
 
-JRA競馬の各レースにおいて、レース開始1時間前・30分前・5分前のオッズ情報を取得し、各馬ごとのオッズ変動率を算出・可視化するシステムです。取得データは Google BigQuery に格納し、Google スプレッドシートの「BigQuery データコネクタ」を介してリアルタイムに参照・分析できます。
+- **レーシングカレンダー取得**：当年分の開催日と開催競馬場を JRA「レーシングカレンダー」から取得  
+- **レース情報取得**：開催日の日本時間9:00に、各競馬場12レース分のレース番号、発走時刻、レース名、レースクラス、芝/ダート、距離、頭数を取得  
+- **出走馬情報取得**：各レースごとに枠順、馬番、馬体重、馬名、騎手を取得  
+- **オッズ取得**：レース発走1時間前、30分前、5分前、レース後にJRA公式とnetkeibaの両方でスクレイピングし、平均値を算出  
+- **変動率計算**：各馬ごとにオッズの変動値・変動率を算出  
+- **結果登録**：Race結果（着順）を取得し、馬ごとに記録  
+- **出力**：日ごとにスプレッドシートを作成し、競馬場・レースごとにシート分けしてデータを整理・共有  
 
-⭐️ 主な特徴
+取得・登録する項目例（シート列順）  
+> 競馬場名 | レース番号 | 発走時刻 | レース名 | レースクラス | 芝/ダート | 距離 | 頭数 | 枠 | 馬番 | 馬体重 | 馬名 | 騎手 | レース1時間前オッズ | レース30分前オッズ | レース5分前オッズ | レース後オッズ | オッズ変動値 | オッズ変動率 | レース結果
 
-- 定点オッズ取得：レース開始前1時間・30分・5分のタイミングでスクレイピング  
-- 変動率計算：各馬ごとにオッズの変化率を自動算出  
-- データ管理：BigQuery にテーブル保存、堅牢なデータウェアハウス  
-- 可視化／共有：Google スプレッドシート連携によるリアルタイム更新  
-- 柔軟なローカル開発：GitHub Codespaces＋Python で手軽にプロトタイプ  
+## ⭐️ 主な特徴
+- **データ冗長性**：JRA公式・netkeiba両ソースから取得し平均化  
+- **自動スケジューリング**：開催日の朝9:00にカレンダー～レース情報を一括取得しバッチ登録  
+- **多段階オッズ取得**：1h/30m/5m前とレース後の4タイミングで取得  
+- **スプレッドシート整理**：日付単位のスプレッドシート、競馬場・レース単位のタブを自動作成  
+- **BigQuery連携**：データウェアハウスに保存し、SQLで参照・集計可能  
 
-🛠️ 開発環境
-
+## 🛠️ 開発環境
 - **IDE／実行環境**：GitHub Codespaces  
 - **言語**：Python 3.9+  
-- **主要ライブラリ**:  
-  - `requests`, `beautifulsoup4`（オッズスクレイピング）  
+- **主要ライブラリ**:
+  - `requests`, `beautifulsoup4`（スクレイピング）  
   - `pandas`（集計・変動率計算）  
   - `google-cloud-bigquery`（BigQuery クライアント）  
   - `apscheduler`（スケジューリング）  
+  - `gspread`（スプレッドシート操作）  
 - **データベース**：Google BigQuery（Sandbox/無料枠）  
-- **可視化**：Google スプレッドシート（BigQuery データコネクタ）  
 
-📁 ディレクトリ構成（例）
+## 📁 ディレクトリ構成（例）
+```  
+├── scripts/  
+│   ├── upsert_calendar.py      # レーシングカレンダー取得・登録  
+│   ├── upsert_races.py         # レース情報（12レース）取得・登録  
+│   ├── upsert_entries.py       # 出走馬情報取得・登録  
+│   ├── fetch_odds.py           # オッズ取得（JRA・netkeiba両対応）  
+│   ├── scheduler.py            # APScheduler設定・ジョブ登録  
+│   ├── calc_fluctuation.py     # 変動率計算・登録  
+│   └── export_sheets.py        # 日別スプレッドシート生成・データ書き込み  
+├── notebooks/                  # 動作確認用ノートブック  
+├── requirements.txt            # Python依存パッケージ  
+└── README.md                   # 本ドキュメント  
+```  
 
+## 🚀 セットアップ手順
+1. **Codespaces起動**  
+   - GitHubリポジトリを作成し「Open with Codespaces」をクリック  
 
-├── scripts/
-│   ├── upsert_races.py       # レース情報取得・BigQuery登録
-│   ├── fetch_odds.py         # オッズスクレイピング関数
-│   ├── scheduler.py          # APScheduler 設定・ジョブ実行
-│   └── calc_fluctuation.py   # 変動率算出バッチ
-├── notebooks/                # 動作確認用ノートブック
-├── requirements.txt         # Python 依存パッケージ
-└── README.md                 # 本ドキュメント
+2. **仮想環境作成 & ライブラリインストール**  
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   ```  
 
-🚀 セットアップ手順
+3. **GCP認証情報設定**  
+   ```bash
+   # Secretsに設定したJSONをファイル化
+   echo "$GCP_CREDENTIALS_JSON" > ~/creds.json
+   export GOOGLE_APPLICATION_CREDENTIALS=~/creds.json
+   ```  
 
-1. **Codespaces 起動**  
-   リポジトリを GitHub で公開 or private とし、「Open with Codespaces」をクリック。
-
-2. **仮想環境作成**  
-
-## GCP 認証情報設定
-```bash
-# GCP プロジェクトでサービスアカウントを作成し JSON キーをダウンロード
-# Codespaces の Secrets に GCP_CREDENTIALS_JSON として設定
-echo "$GCP_CREDENTIALS_JSON" > ~/creds.json
-export GOOGLE_APPLICATION_CREDENTIALS=~/creds.json
-```
-
-## BigQuery データセット・テーブル作成
-```sql
--- データセット作成
-CREATE SCHEMA IF NOT EXISTS `jra_odds`;
-
--- レース基本情報テーブル
-CREATE TABLE IF NOT EXISTS `jra_odds.race` (
-  race_id     STRING PRIMARY KEY,
-  race_date   DATE,
-  start_time  DATETIME,
-  race_class  STRING,
-  result      STRING
-);
-
--- オッズスナップショットテーブル
-CREATE TABLE IF NOT EXISTS `jra_odds.odds_snapshot` (
-  race_id      STRING,
-  horse_no     INT64,
-  snapshot_at  DATETIME,
-  odds         FLOAT64,
-  label        STRING
-);
-
--- 変動率テーブル
-CREATE TABLE IF NOT EXISTS `jra_odds.odds_fluctuation` (
-  race_id      STRING,
-  horse_no     INT64,
-  from_label   STRING,
-  to_label     STRING,
-  rate_change  FLOAT64
-);
-```
+4. **BigQueryデータセット・テーブル作成**  
+   ```sql
+   CREATE SCHEMA IF NOT EXISTS `jra_odds`;
+   -- race, entries, odds_snapshot, odds_fluctuation, race_result などのテーブルを定義
+   ```  
 
 ## 🏗️ 実装・運用手順
-```bash
-# 1. レース情報の登録
-python scripts/upsert_races.py
+1. **レーシングカレンダー登録**  
+   ```bash
+   python scripts/upsert_calendar.py
+   ```  
 
-# 2. オッズ取得ジョブのスケジュール
-python scripts/scheduler.py
+2. **レース＆出走馬情報登録**  
+   ```bash
+   python scripts/upsert_races.py
+   python scripts/upsert_entries.py
+   ```  
 
-# 3. 変動率バッチ実行 (レースID指定)
-python scripts/calc_fluctuation.py --race_id <race_id>
-```
+3. **オッズ取得スケジュール**  
+   ```bash
+   python scripts/scheduler.py
+   ```  
+   - 1h/30m/5m前とレース後の取得ジョブを登録  
 
-## 📊 Google スプレッドシート連携
-1. Google スプレッドシートを作成  
-2. メニュー「データ」→「データコネクタ」→「BigQuery に接続」  
-3. プロジェクト `jra_odds` → テーブル `odds_snapshot` / `odds_fluctuation` を選択  
-4. シート上でフィルター・ピボットを設定し、動的に可視化  
+4. **変動率計算**  
+   ```bash
+   python scripts/calc_fluctuation.py --race_id <race_id>
+   ```  
+
+5. **スプレッドシート生成・出力**  
+   ```bash
+   python scripts/export_sheets.py --date YYYY-MM-DD
+   ```  
 
 ## 🤝 コラボレーション
-- コラボレーターを招待して共同開発が可能。  
-- private リポジトリでも Codespaces / Actions は無料枠で利用可。  
+- コラボレーター招待による共同開発が可能  
+- PrivateリポジトリでもCodespaces/Actions無料枠内で利用可  
 
 ## 📜 ライセンス
 MIT License
+```
