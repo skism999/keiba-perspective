@@ -66,10 +66,61 @@ JRA公式サイトと netkeiba.com の両方からデータを取得し、各レ
    ```  
 
 4. **BigQueryデータセット・テーブル作成**  
-   ```sql
-   CREATE SCHEMA IF NOT EXISTS `jra_odds`;
-   -- race, entries, odds_snapshot, odds_fluctuation, race_result などのテーブルを定義
-   ```  
+```sql
+-- データセット作成（locationは必要に応じて指定）
+CREATE SCHEMA IF NOT EXISTS `jra_odds` OPTIONS(location="asia-northeast1");
+
+-- レース基本情報テーブル
+CREATE TABLE IF NOT EXISTS `jra_odds.race` (
+  race_id         STRING,
+  race_date       DATE,
+  start_time      DATETIME,
+  race_name       STRING,
+  race_class      STRING,
+  track_surface   STRING,       -- 芝/ダート
+  distance_m      INT64,        -- 距離（メートル）
+  entries_count   INT64         -- 頭数
+);
+
+-- 出走馬情報テーブル
+CREATE TABLE IF NOT EXISTS `jra_odds.entries` (
+  race_id     STRING,
+  frame_no    INT64,
+  horse_no    INT64,
+  weight_kg   INT64,
+  horse_name  STRING,
+  jockey      STRING
+);
+
+-- オッズスナップショットテーブル
+CREATE TABLE IF NOT EXISTS `jra_odds.odds_snapshot` (
+  race_id        STRING,
+  horse_no       INT64,
+  snapshot_at    DATETIME,
+  odds_jra       FLOAT64,
+  odds_netkeiba  FLOAT64,
+  odds_avg       FLOAT64,
+  label          STRING        -- '1h_before','30m_before','5m_before','post_race'
+);
+
+-- 変動率テーブル
+CREATE TABLE IF NOT EXISTS `jra_odds.odds_fluctuation` (
+  race_id           STRING,
+  horse_no          INT64,
+  from_label        STRING,
+  to_label          STRING,
+  fluctuation_value FLOAT64,
+  fluctuation_rate  FLOAT64
+);
+
+-- レース結果テーブル
+CREATE TABLE IF NOT EXISTS `jra_odds.race_results` (
+  race_id         STRING,
+  horse_no        INT64,
+  finish_position INT64
+);
+```  
+
 
 ## 🏗️ 実装・運用手順
 1. **レーシングカレンダー登録**  
