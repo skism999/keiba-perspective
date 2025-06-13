@@ -1,55 +1,64 @@
 # scripts/upsert_calendar.py
 import os
-from datetime import datetime
+from datetime import datetime, date
 from icalendar import Calendar
 from google.cloud import bigquery
 
-# ICS ファイルパス（リポジトリ直下を想定）
-ICS_PATH = 'data/race_calendar/jrarace2025.ics'
-# BigQuery のカレンダーテーブル
-BQ_TABLE = f"{bigquery.Client().project}.jra_odds.calendar"
+# 環境変数 or デフォルトパス
+ICS_PATH = os.getenv('JRA_CALENDAR_ICS', 'data/race_calendar/jrarace2025.ics')
+PROJECT = bigquery.Client().project
+DATASET = 'jra_odds'
 
 def fetch_calendar_from_ics(path: str) -> list[dict]:
-    """
-    ICS の VEVENT を読み込み、race_date（DATE型文字列）と track（LOCATION）を返す。
-    SUMMARY はレース名として出力用に使いたい場合に取得可能。
-    """
+    """ICS ファイルから race_date(date) と track(string) を抽出"""
     with open(path, 'rb') as f:
         cal = Calendar.from_ical(f.read())
-
-    rows = []
+    events = []
     for comp in cal.walk():
         if comp.name != 'VEVENT':
             continue
-        # DTSTART;VALUE=DATE:YYYYMMDD -> date オブジェクト
         dt = comp.get('DTSTART').dt
-        # LOCATION フィールドに競馬場名
+        # date 型に統一
+        rd = dt if isinstance(dt, date) else dt.date()
         track = str(comp.get('LOCATION')).strip()
-        # SUMMARY にレース名（必要なら使える）
-        summary = str(comp.get('SUMMARY')).strip()
-
-        # race_date を ISO 形式文字列で
-        date_str = dt.isoformat()  # '2025-08-31' など
-        rows.append({
-            'race_date': date_str,
-            'track':     track,
-            # 'summary': summary,  # 必要ならテーブルにカラム追加して使ってください
-        })
-    return rows
+        events.append({'race_date': rd, 'track': track})
+    return events
 
 def upsert_calendar():
     client = bigquery.Client()
-    entries = fetch_calendar_from_ics(ICS_PATH)
-    if not entries:
-        print("ICS に有効なイベントが見つかりませんでした。")
+    rows = fetch_calendar_from_ics(ICS_PATH)
+    if not rows:
+        print("No calendar entries found.")
         return
 
-    # BigQuery に一括挿入
-    errors = client.insert_rows_json(BQ_TABLE, entries)
+    # 日付順にソート
+    rows.sort(key=lambda r: r['race_date'])
+
+    # テーブル名を "{year}_race_calendar" とする
+    year = rows[0]['race_date'].year
+    table_id = f"{PROJECT}.{DATASET}.{year}_race_calendar"
+
+    # DDL：テーブルがなければ作成
+    ddl = f"""
+    CREATE TABLE IF NOT EXISTS `{table_id}` (
+      race_date DATE,
+      track     STRING
+    )
+    """
+    client.query(ddl).result()
+    print(f"Ensured table exists: {table_id}")
+
+    # BigQuery に挿入
+    # JSON にする際、日付は ISO フォーマット文字列で渡す
+    bq_rows = [
+        {'race_date': r['race_date'].isoformat(), 'track': r['track']}
+        for r in rows
+    ]
+    errors = client.insert_rows_json(table_id, bq_rows)
     if errors:
-        print("BigQuery への挿入中にエラー発生:", errors)
+        print("Insert errors:", errors)
     else:
-        print(f"ICS から {len(entries)} 件のカレンダー情報を登録しました。")
+        print(f"Inserted {len(bq_rows)} rows into {table_id}.")
 
 if __name__ == '__main__':
     upsert_calendar()
