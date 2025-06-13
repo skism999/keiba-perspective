@@ -4,7 +4,7 @@
   "image": "mcr.microsoft.com/devcontainers/python:3.11",  
   "features": {
     // gcloud-cli を入れる Dev Container Feature（Microsoft公式）
-    "ghcr.io/devcontainers/features/gcloud-cli:1": {}
+    "mcr.microsoft.com/devcontainers/features/gcloud-cli:1": {}
   },
   "postStartCommand": [
     // 1) Secrets に設定した JSON をファイルに書き出し
