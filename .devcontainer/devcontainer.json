@@ -1,0 +1,26 @@
+// .devcontainer/devcontainer.json
+{
+  "name": "Keiba Perspective",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",  
+  "features": {
+    // gcloud-cli を入れる Dev Container Feature（Microsoft公式）
+    "ghcr.io/devcontainers/features/gcloud-cli:1": {}
+  },
+  "postStartCommand": [
+    // 1) Secrets に設定した JSON をファイルに書き出し
+    "echo \"$GCP_CREDENTIALS_JSON\" > ~/creds.json",
+    // 2) 環境変数をシェルに追加（毎セッション）
+    "grep -qxF 'export GOOGLE_APPLICATION_CREDENTIALS=~/creds.json' ~/.bashrc || echo 'export GOOGLE_APPLICATION_CREDENTIALS=~/creds.json' >> ~/.bashrc",
+    // 3) gcloud 認証・プロジェクト設定
+    "gcloud auth activate-service-account --key-file=~/creds.json --quiet",
+    "gcloud config set project keiba-perspective --quiet"
+  ],
+  "customizations": {
+    "codespaces": {
+      "openFiles": ["scripts/upsert_calendar.py"]
+    },
+    "vscode": {
+      "settings": { /* お好みの VSCode 設定 */ }
+    }
+  }
+}
